@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruleta de Sorteo</title>
+    <!-- Estilos de AdminLTE -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/3.1.0/css/adminlte.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 50px;
+        }
+        .ruleta-container {
+            position: relative;
+            width: 350px;
+            height: 350px;
+        }
+        .ruleta {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 10px solid #333;
+            position: relative;
+            overflow: hidden;
+            transition: transform 4s ease-out;
+        }
+        .opcion {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            clip-path: polygon(100% 50%, 0 0, 0 100%);
+            transform-origin: 100% 50%;
+        }
+        .boton-girar {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .flecha {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 20px solid black;
+        }
+        .sorteados-container {
+            margin-left: 50px;
+            width: 250px;
+            height: 350px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .sorteados-container h3 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="hold-transition sidebar-mini">
+
+<div class="wrapper">
+    <!-- Navbar -->
+    <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+            </li>
+            <li class="nav-item d-none d-sm-inline-block">
+                <a href="#" class="nav-link">Home</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="content-wrapper">
+        <div class="content-header">
+            <div class="container-fluid text-center">
+                <h1>Ruleta de Sorteo</h1>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Contenedor de la ruleta -->
+            <div class="ruleta-container">
+                <div class="flecha"></div>
+                <div class="ruleta" id="ruleta"></div>
+                <button class="boton-girar" onclick="girarRuleta()">Girar Ruleta</button>
+            </div>
+
+            <!-- Contenedor de la lista de sorteados -->
+            <div class="sorteados-container">
+                <h3>Ganadores</h3>
+                <p id="lista-sorteados">Esperando participantes...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Campo para cargar el archivo Excel -->
+<input type="file" id="excel-file" accept=".xlsx, .xls" />
+
+<script>
+    let opciones = []; // Este array almacenará los participantes del Excel
+    const ruleta = document.getElementById("ruleta");
+    const listaSorteados = document.getElementById("lista-sorteados");
+    let ganadores = [];  // Array para guardar los ganadores sin repeticiones
+    let participantesRestantes = []; // Lista de participantes que aún no han ganado
+
+    // Función para manejar la carga del archivo Excel
+    document.getElementById('excel-file').addEventListener('change', handleFile, false);
+
+    function handleFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = e.target.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+
+            // Convertir la hoja a JSON
+            const jsonData = XLSX.utils.sheet_to_json(sheet);
+            console.log(jsonData); // Ver los datos del archivo en consola
+
+            // Llamar a la función que carga los participantes
+            cargarParticipantes(jsonData);
+        };
+
+        reader.readAsBinaryString(file);
+    }
+
+    // Función para cargar los participantes en la ruleta
+    function cargarParticipantes(data) {
+        // Suponiendo que las columnas son Mina, Nombre y CIP
+        opciones = data.map(row => ({
+            mina: row['Mina'],
+            nombre: row['Nombre'],
+            cip: row['CIP']
+        }));
+
+        // Inicializamos los participantes restantes con todos los participantes
+        participantesRestantes = [...opciones];
+
+        // Regenerar la ruleta con los datos importados
+        generarRuleta();
+    }
+
+    function generarRuleta() {
+        let numOpciones = opciones.length;
+        let angulo = 360 / numOpciones;
+
+        opciones.forEach((opcion, index) => {
+            let elemento = document.createElement("div");
+            elemento.classList.add("opcion");
+            elemento.style.backgroundColor = `hsl(${index * angulo}, 100%, 50%)`;
+            elemento.style.transform = `rotate(${index * angulo}deg)`;
+            elemento.innerHTML = `<span style="position: absolute; left: 50%; transform: translateX(-50%) rotate(${angulo / 2}deg); font-size: 14px; color: white;">${opcion.mina}</span>`;
+            ruleta.appendChild(elemento);
+        });
+    }
+
+    function girarRuleta() {
+        if (participantesRestantes.length === 0) {
+            listaSorteados.textContent = "No hay más participantes.";
+            return;
+        }
+
+        let vueltas = Math.floor(Math.random() * 5) + 3;
+        let anguloFinal = Math.floor(Math.random() * 360);
+        let rotacion = 360 * vueltas + anguloFinal;
+        ruleta.style.transform = `rotate(${rotacion}deg)`;
+
+        setTimeout(() => {
+            let indexGanador = Math.floor(anguloFinal / (360 / participantesRestantes.length));
+            let ganador = participantesRestantes[indexGanador];
+
+            // Eliminar el ganador de la lista de participantes restantes
+            participantesRestantes = participantesRestantes.filter(p => p !== ganador);
+
+            // Agregar ganador a la lista
+            ganadores.push(ganador);
+            agregarSorteado(ganador);
+
+        }, 4000);
+    }
+
+    function agregarSorteado(ganador) {
+        // Mostrar los ganadores en una línea, separados por comas
+        listaSorteados.textContent = ganadores.map(g => `${g.mina}: ${g.nombre} (CIP: ${g.cip})`).join(", ");
+    }
+</script>
+
+</body>
+</html>
